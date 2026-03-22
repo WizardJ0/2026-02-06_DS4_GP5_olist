@@ -1,0 +1,83 @@
+version: 1
+default_environment: dev
+project_id: olist_meltano
+
+environments:
+- name: dev
+
+jobs:
+  - name: olist_pipeline
+    tasks:
+      - tap-csv target-bigquery dbt-bigquery:run
+      
+plugins:
+  extractors:
+  - name: tap-csv
+    variant: meltanolabs
+    pip_url: git+https://github.com/MeltanoLabs/tap-csv.git
+    config:
+      files:
+      - entity: customers
+        path: ../data/olist_customers_dataset.csv
+        keys: [customer_id]
+
+      - entity: order_items
+        path: ../data/olist_order_items_dataset.csv
+        keys: [order_id, order_item_id]
+
+      - entity: order_payments
+        path: ../data/olist_order_payments_dataset.csv
+        keys: [order_id, payment_sequential]
+
+      - entity: order_reviews
+        path: ../data/olist_order_reviews_dataset.csv
+        keys: [review_id]
+
+      - entity: orders
+        path: ../data/olist_orders_dataset.csv
+        keys: [order_id]
+
+      - entity: products
+        path: ../data/olist_products_dataset.csv
+        keys: [product_id]
+
+      - entity: sellers
+        path: ../data/olist_sellers_dataset.csv
+        keys: [seller_id]
+
+      - entity: geolocation
+        path: ../data/olist_geolocation_dataset.csv
+        keys: [geolocation_zip_code_prefix]
+
+      - entity: product_category_name_translation
+        path: ../data/product_category_name_translation.csv
+        keys: [product_category_name]
+        encoding: utf-8-sig  # <--- Add this line here
+
+    select:
+    - '*.*'
+  loaders:
+  - name: target-bigquery
+    variant: z3z1ma
+    pip_url: git+https://github.com/z3z1ma/target-bigquery.git setuptools<70
+    config:
+      project: ${GOOGLE_PROJECT_ID}
+      dataset: olist  # Keep it separate!
+      location: US
+      method: batch_job
+      denormalized: true
+      flattening_enabled: true
+      flattening_max_depth: 1
+      upsert: false
+      overwrite: true
+      dedupe_before_upsert: false
+
+  utilities:
+  - name: dbt-bigquery
+    variant: jeffrey-hanson
+    pip_url: dbt-core dbt-bigquery
+    config:
+      # Tell Meltano where your dbt project actually is
+      project_dir: $MELTANO_PROJECT_ROOT/../dbt_olist
+      # Tell Meltano where to find your profiles.yml
+      profiles_dir: $MELTANO_PROJECT_ROOT/../dbt_olist

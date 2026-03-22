@@ -1,0 +1,23 @@
+name: olist-bq
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # Core Tools
+      - dbt-bigquery
+      - meltano
+      - dagster
+      - dagster-webserver
+      
+      # Data & BigQuery
+      - google-cloud-bigquery
+      - pandas-gbq
+      - pyarrow
+      - pandas
+      
+      # Quality & Analysis
+      - jupyter
+      - python-dotenv

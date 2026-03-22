@@ -1,0 +1,44 @@
+# --- Security & Secrets ---
+.env
+.envrc
+*.json
+**/.dbt/profiles.yml
+**/profiles.yml
+
+# --- Python & IDE (Conda Optimized) ---
+__pycache__/
+*.py[cod]
+*$py.class
+.conda/
+.ipynb_checkpoints/
+
+# IDEs
+.idea/
+.vscode/
+.DS_Store
+
+# --- Meltano (Ingestion) and do not include heavy lifting in git log and extract output ---
+.meltano/
+meltano/.env
+extract/out/
+output/
+*.log
+
+# --- dbt (Transformation) ---
+dbt_olist/target/
+dbt_olist/dbt_packages/
+dbt_olist/logs/
+run.db
+
+# --- Dagster (Orchestration) ---
+.tmp_dagster_home_*
+dagster_home/
+storage/
+*.db
+
+# --- Data ---
+data/*
+!data/.gitkeep
+*.csv
+*.parquet
+.ipynb_checkpoints/

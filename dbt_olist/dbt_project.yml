@@ -1,0 +1,26 @@
+name: "dbt_olist" # Change this to match your folder
+version: "1.0.0"
+config-version: 2
+
+profile: "dbt_olist" # This stays the same (matches profiles.yml)
+
+# Core Paths (Keep these for future growth)
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Model Configurations
+models:
+  dbt_olist: # This matches your VS Code folder name
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
