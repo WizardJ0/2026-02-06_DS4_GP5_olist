@@ -1,7 +1,9 @@
 # 📦 Olist E-commerce Data Pipeline
 
 > An end-to-end production data pipeline built on the Brazilian Olist e-commerce dataset — orchestrating extraction, transformation, and visualization across a modern lakehouse stack.
-
+<p align="center">
+  <img src="asset/datastackarch.png" width="800" alt="Modern Data Stack Architecture">
+</p
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![dbt](https://img.shields.io/badge/dbt-1.x-FF694B?style=flat-square&logo=dbt&logoColor=white)](https://getdbt.com)
 [![Dagster](https://img.shields.io/badge/Dagster-Orchestration-854FFF?style=flat-square)](https://dagster.io)
@@ -233,10 +235,15 @@ The Streamlit dashboard provides an executive-level view of the Olist dataset ac
 | **Top 15 Product Categories** | Donut chart of best-selling categories by volume |
 | **State Market Share** | Sunburst chart drilling from state → product category revenue |
 
-![Dashboard Overview](salesportal1.png)
-![Customer Segments & Categories](salesportal2.png)
-![State Market Share Sunburst](salesportal3.png)
-
+<p align="center">
+  <img src="asset/salesportal1.png" width="800" alt="Dashboard Overview">
+</p>
+<p align="center">
+  <img src="asset/salesportal2.png" width="800" alt="Customer Segments & Categories">
+</p>
+<p align="center">
+  <img src="asset/salesportal3.png" width="800" alt="State Market Share Sunburst">
+</p
 ---
 
 ## 🧪 Data Quality
