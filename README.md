@@ -354,9 +354,6 @@ The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consis
 - **Root cause:** Traced to `int_orders_enriched` — customers whose `order_status` was `canceled` or `unavailable` were excluded from RFM scoring, leaving their metrics as `NULL`
 - **Fix:** Added a conditional in the model to coalesce `NULL` monetary/frequency/recency values to `0` for any order with status `canceled` or `unavailable`, ensuring every customer receives a valid RFV score
 - `customer_id_is_invalid: [False]` confirmed uniformly across all records post-fix ✅
----
-
----
 
 **📦 `dim_products` — Uncategorized & Null Spec Fixes**
 - **Issue:** Some products (e.g. `5eb564652db742ff8f28759cd8d2652a`) had blank `product_category_name`, `product_name` as `-1`, `product_description` as `-1`, `product_photos_qty` as `0`, and all physical dimension fields as `NULL`
@@ -366,16 +363,12 @@ coalesce(cm.product_category_name, 'uncategorized')
 ```
 - Retest confirmed **591 uncategorized products** correctly labelled — no more blank strings in `product_category_name` ✅
 
----
-
 **📐 `int_customer_metrics` & `int_rfv_quartiles` — Monetary Nulls & Frequency Fix**
 - **Issue 1:** `monetary_value` had null entries and long floating-point decimals for some records
 - **Issue 2:** `frequency` was returning `1` for all customers — root cause: the model was joining on `customer_id` (a non-unique order-level key) instead of the true unique identifier
 - **Issue 3:** `recency` values were returning 4-digit numbers (days since epoch instead of days since last order)
 - **Fix:** Switched the join key from `customer_id` to `customer_uuid` (the true unique customer identifier), which resolved both the frequency collapse and recency miscalculation
 - `monetary_value` nulls patched to `0` via `coalesce`; confirmed `NULL monetary values remaining: 0` ✅
-
----
 
 **🔢 Float Precision — Staging Model Rounding**
 - **Issue:** Several numeric columns (`total_item_value`, `total_freight_value`, `price`, `freight_value`) carried long floating-point decimals due to BigQuery `FLOAT64` arithmetic (e.g. `238.99000000000004`)
