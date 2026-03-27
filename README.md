@@ -220,7 +220,6 @@ meltano run tap-csv target-bigquery
 └── salesportal.py                  # Streamlit executive dashboard
 ```
 ---
----
 
 ## 🗄️ Data Model — Star Schema (ERD)
 ```mermaid
@@ -306,6 +305,7 @@ erDiagram
     fct_sales ||--o{ dim_location   : "location_id"
     fct_sales ||--o{ dim_time       : "time_id"
 ```
+---
 ## 🔬 Exploratory Data Analysis (EDA)
 
 The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consistency check against the transformed BigQuery marts before dashboard consumption.
@@ -364,6 +364,52 @@ The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consis
 **Monetary Patching**
 - `monetary_value` nulls → patched to `0`; no downstream NaN errors in RFM calculations
 - Sample audit record confirmed: `total_item_value: 238.99`, `total_freight_value: 22.47` — 2dp rounding validated ✅
+- 
+---
+
+### 🔍 Manual Fixes
+
+**📍 Geolocation Patching**
+- `int_customer_location_mapping` had null `geolocation_city`, `geolocation_state`, `lat`, and `lng` values — root cause: some customer `zip_code_prefix` values did not exist in the source geolocation table
+- **Fix:** One-time dbt seed file (`patch_missing_geolocations.csv`) introduced via `dbt seed` to backfill all missing zip code entries
+- Additionally, 4-digit `geolocation_zip_code_prefix` values were padded with a leading `0` to standardize to 5 digits and match the lookup key format
+- Model logic: `int_customer_location_mapping` first attempts to join against the live geolocation table; if no record is found, it falls back to the seed table to complete the lookup — zero downstream geolocation nulls remain ✅
+
+---
+
+**👤 `dim_customers` — RFV Null & Segment Fixes**
+- Columns validated: `customer_id`, `customer_uuid`, `zip_code_prefix`, `customer_city`, `customer_state`
+- **Issue:** A subset of customers had `NULL` `rfv_score`, `NULL` `customer_segment`, and `customer_id_is_invalid` always returning `False`
+- **Root cause:** Traced to `int_orders_enriched` — customers whose `order_status` was `canceled` or `unavailable` were excluded from RFM scoring, leaving their metrics as `NULL`
+- **Fix:** Added a conditional in the model to coalesce `NULL` monetary/frequency/recency values to `0` for any order with status `canceled` or `unavailable`, ensuring every customer receives a valid RFV score
+- `customer_id_is_invalid: [False]` confirmed uniformly across all records post-fix ✅
+
+---
+
+**📦 `dim_products` — Uncategorized & Null Spec Fixes**
+- **Issue:** Some products (e.g. `5eb564652db742ff8f28759cd8d2652a`) had blank `product_category_name`, `product_name` as `-1`, `product_description` as `-1`, `product_photos_qty` as `0`, and all physical dimension fields as `NULL`
+- **Fix:** Retested `dim_products` and `int_products_categorized`; corrected both models to replace blank or null category values with the explicit string `'uncategorized'` using:
+```jinja-sql
+coalesce(cm.product_category_name, 'uncategorized')
+```
+
+- Retest confirmed **591 uncategorized products** correctly labelled — no more blank strings in `product_category_name` ✅
+
+---
+
+**📐 `int_customer_metrics` & `int_rfv_quartiles` — Monetary Nulls & Frequency Fix**
+- **Issue 1:** `monetary_value` had null entries and long floating-point decimals for some records
+- **Issue 2:** `frequency` was returning `1` for all customers — root cause: the model was joining on `customer_id` (a non-unique order-level key) instead of the true unique identifier
+- **Issue 3:** `recency` values were returning 4-digit numbers (days since epoch instead of days since last order)
+- **Fix:** Switched the join key from `customer_id` to `customer_uuid` (the true unique customer identifier), which resolved both the frequency collapse and recency miscalculation
+- `monetary_value` nulls patched to `0` via `coalesce`; confirmed `NULL monetary values remaining: 0` ✅
+
+---
+
+**🔢 Float Precision — Staging Model Rounding**
+- **Issue:** Several numeric columns (`total_item_value`, `total_freight_value`, `price`, `freight_value`) carried long floating-point decimals due to BigQuery `FLOAT64` arithmetic (e.g. `238.99000000000004`)
+- **Fix:** Applied `ROUND(..., 2)` directly in the **staging models** so all downstream intermediate and mart tables inherit clean 2-decimal-place values — no ad-hoc patching required at the mart layer
+- Sample audit confirmed: `total_item_value: 238.99`, `total_freight_value: 22.47` ✅
 ---
 
 ## 📊 Dashboard Preview
