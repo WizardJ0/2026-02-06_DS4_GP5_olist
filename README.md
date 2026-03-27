@@ -220,7 +220,92 @@ meltano run tap-csv target-bigquery
 └── salesportal.py                  # Streamlit executive dashboard
 ```
 ---
+---
 
+## 🗄️ Data Model — Star Schema (ERD)
+```mermaid
+erDiagram
+    fct_sales {
+        string sale_id PK
+        string order_id FK
+        string customer_id FK
+        string product_id FK
+        string seller_id FK
+        string location_id FK
+        date time_id FK
+        object quantity
+        float64 price
+        float64 freight_value
+        float64 total_payment_value
+        Int64 payment_installments
+    }
+
+    dim_customers {
+        string customer_id PK
+        string customer_segment
+        float lifetime_value
+        float latitude
+        float longitude
+        int days_since_last_order
+        int lifetime_frequency
+        string customer_city
+        string customer_state
+        float rfv_score
+        bool customer_id_is_invalid
+    }
+
+    dim_orders {
+        string order_id PK
+        string order_status
+        timestamp order_purchase_timestamp
+        float actual_amount_paid
+        int lead_time_days
+        bool is_delivered_on_time
+        float total_item_value
+        float total_freight_value
+    }
+
+    dim_products {
+        string product_id PK
+        string product_category_name
+        bool is_top_15_seller
+        float product_weight_g
+        float product_length_cm
+    }
+
+    dim_sellers {
+        string seller_id PK
+        string seller_city
+        string seller_state
+        string seller_zip_code_prefix
+    }
+
+    dim_location {
+        string location_id PK
+        string geolocation_state
+        string geolocation_city
+        float geolocation_lat
+        float geolocation_lng
+    }
+
+    dim_time {
+        date time_id PK
+        int year
+        int month
+        int day
+        string month_name
+        int quarter
+        int week_of_year
+        int day_of_week
+    }
+
+    fct_sales ||--o{ dim_customers  : "customer_id"
+    fct_sales ||--o{ dim_orders     : "order_id"
+    fct_sales ||--o{ dim_products   : "product_id"
+    fct_sales ||--o{ dim_sellers    : "seller_id"
+    fct_sales ||--o{ dim_location   : "location_id"
+    fct_sales ||--o{ dim_time       : "time_id"
+```
 ## 🔬 Exploratory Data Analysis (EDA)
 
 The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consistency check against the transformed BigQuery marts before dashboard consumption.
