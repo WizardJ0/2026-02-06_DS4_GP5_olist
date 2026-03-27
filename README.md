@@ -306,6 +306,45 @@ erDiagram
     fct_sales ||--o{ dim_time       : "time_id"
 ```
 ---
+
+## ⚙️ Dagster Asset Lineage
+
+The pipeline is defined in `dagster/definition.py` and consists of three asset groups executed in sequence:
+
+### Asset Groups
+
+| Asset | Group | Depends On | Description |
+|---|---|---|---|
+| `olist_dbt_assets` | *(default)* | Meltano EL | Runs all dbt models via `dbt run`, excluding `dbt_expectations` package tests from the run step |
+| `quality_gate` | `quality` | `olist_dbt_assets` | Executes `dbt test --select package:dbt_expectations` — acts as a quality checkpoint before docs generation |
+| `dbt_docs_asset` | `metadata` | `quality_gate` | Runs `dbt docs generate` to refresh the dbt documentation site after all tests pass |
+
+### Execution Flow
+```
+olist_dbt_assets  ──▶  quality_gate  ──▶  dbt_docs_asset
+  (dbt run)            (dbt test)        (dbt docs generate)
+```
+
+### Custom Translator (`CustomTranslator`)
+
+A custom `DagsterDbtTranslator` subclass enriches the Dagster asset graph UI with column-level metadata:
+
+- Reads `catalog.json` from `dbt_olist/target/` at startup to retrieve **actual BigQuery column types**
+- Priority order for column type resolution: **Catalog** (`catalog.json`) → **YAML definition** (`data_type`) → `"unknown"` fallback
+- Injects `dagster/column_schema` metadata so column names, types, and descriptions appear directly in the **Dagster asset lineage UI**
+
+### Registered Job
+
+| Job | Selection | Trigger |
+|---|---|---|
+| `run_full_pipeline` | `AssetSelection.all()` | Manual (Dagster UI) or scheduled |
+
+### Key Implementation Notes
+
+- `ROOT_DIR` is resolved via `Path(__file__).resolve().parents[1]` — navigates up from `dagster/definition.py` to the project root, ensuring all relative paths resolve correctly regardless of where Dagster is launched from
+- `.env` is loaded at startup via a custom `_load_dotenv()` function that handles UTF-8 BOM encoding (`utf-8-sig`) and strips quotes from values
+- `dbt run` explicitly **excludes** `dbt_expectations` package models; `dbt test` explicitly **selects** only `dbt_expectations` tests — separating transformation from validation in the asset stream
+---
 ## 🔬 Exploratory Data Analysis (EDA)
 
 The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consistency check against the transformed BigQuery marts before dashboard consumption.
@@ -322,9 +361,7 @@ The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consis
 | 6 | **Intermediate Table Patching & Monetary Logic** | Null monetary values patched to 0; long decimals rounded to 2dp (e.g. `238.99000000000004` → `238.99`) |
 | 7 | **City & State Normalization Check** | **10 cities** with residual accent encoding errors (`maceia³` → `maceió`); 0 affected states |
 | 8 | **Final Sales & Payments Integrity** | **0 rows dropped** from `fct_sales` — no zero-payment or missing payment method records found |
-
 ---
-
 ### 📊 Statistical Profile — `fct_sales`
 
 | Metric | `price` | `freight_value` | `total_payment_value` |
