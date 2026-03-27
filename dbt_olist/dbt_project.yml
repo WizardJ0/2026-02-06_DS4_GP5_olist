@@ -1,14 +1,14 @@
-name: "dbt_olist" # Change this to match your folder
+name: "dbt_olist"
 version: "1.0.0"
 config-version: 2
 
-profile: "dbt_olist" # This stays the same (matches profiles.yml)
+profile: "dbt_olist" 
 
-# Core Paths (Keep these for future growth)
+# Core Paths
 model-paths: ["models"]
+seed-paths: ["seeds"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
-seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
@@ -17,10 +17,23 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+# NEW: Required by dbt-expectations for 'recent_data' tests
+vars:
+  dbt_date:time_zone: "America/Sao_Paulo" # Sets timezone for Olist Brazil data
+
 # Model Configurations
 models:
-  dbt_olist: # This matches your VS Code folder name
+  dbt_olist: 
     staging:
       +materialized: view
+    intermediate:
+      +materialized: table      
     marts:
       +materialized: table
+
+# Seed Configurations
+seeds:
+  dbt_olist:
+    patch_missing_geolocations:
+      +column_types:
+        zip_code_prefix: string

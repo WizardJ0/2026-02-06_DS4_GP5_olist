@@ -6,18 +6,33 @@ dependencies:
   - python=3.10
   - pip
   - pip:
-      # Core Tools
-      - dbt-bigquery
-      - meltano
+      # --- Orchestration ---
       - dagster
       - dagster-webserver
+      - dagster-dbt
       
-      # Data & BigQuery
+      # --- Transformation & Ingestion ---
+      - dbt-bigquery
+      - meltano
+      
+      # --- High-Speed BigQuery Data Access (FIXED) ---
       - google-cloud-bigquery
+      - google-cloud-bigquery-storage # <--- Adds the missing module
+      - grpcio                        # <--- Required for high-speed transfer
+      - pyarrow                       # <--- Required for fast DataFrame conversion
       - pandas-gbq
-      - pyarrow
-      - pandas
       
-      # Quality & Analysis
+      # --- Quality & Analysis ---
+      - great-expectations  # Required for your ge_raw_order_items.py script
       - jupyter
+      - dbterd  # er diagram
+      - pandas
+      - numpy
       - python-dotenv
+
+      # --- Dashboard & Visualization ---
+      - streamlit
+      - plotly
+      - statsmodels
+      - matplotlib
+      - seaborn
