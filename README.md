@@ -38,7 +38,28 @@ As shown in figure 1, raw CSV files from Olist are extracted and loaded by **Mel
 
 Follow these steps to replicate the environment and run the full data pipeline.
 
-### Step 1: Environment & Secrets Setup
+### Step 1: Download the Olist Dataset
+
+1. Download the dataset from Kaggle: [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
+
+2. Place the CSV files into the `data/` folder so the structure looks like this:
+```
+   2026-02-06_DS4_GP5_olist/
+   └── data/
+       ├── olist_customers_dataset.csv
+       ├── olist_orders_dataset.csv
+       ├── olist_order_items_dataset.csv
+       ├── olist_order_payments_dataset.csv
+       ├── olist_order_reviews_dataset.csv
+       ├── olist_products_dataset.csv
+       ├── olist_sellers_dataset.csv
+       ├── olist_geolocation_dataset.csv
+       └── product_category_name_translation.csv
+```
+
+> **Note:** The `data/` folder is git-ignored and must be populated manually before running the pipeline.
+
+### Step 2: Environment & Secrets Setup
 
 First, recreate the environment and provide your own credentials.
 
@@ -67,6 +88,7 @@ First, recreate the environment and provide your own credentials.
 ```bash
      gcloud auth application-default login
 ```
+> **Note:** The `.env` file is git-ignored and must be populated manually before running the pipeline.
 
 4. **dbt Profile:** Link the project to your local dbt config:
 ```bash
@@ -74,7 +96,7 @@ First, recreate the environment and provide your own credentials.
    cp dbt_olist/profiles.yml ~/.dbt/profiles.yml
 ```
 
-### Step 2: Meltano Ingestion
+### Step 3: Meltano Ingestion
 
 Meltano will auto-install the plugins on the first run as long as you are in the `olist-bq` environment.
 ```bash
@@ -82,7 +104,7 @@ Meltano will auto-install the plugins on the first run as long as you are in the
 export $(cat .env | grep -v '#' | xargs)
 meltano --cwd meltano run tap-csv target-bigquery
 ```
-### Step 3: dbt Initialization
+### Step 4: dbt Initialization
 
 dbt needs to download packages (like `dbt_expectations`) and build the `manifest.json` before Dagster can see the assets.
 ```bash
@@ -94,7 +116,7 @@ dbt docs generate
 cd ..
 ```
 
-### Step 4: Dagster Orchestration
+### Step 5: Dagster Orchestration
 
 To ensure Dagster picks up all the dbt models and expectations correctly:
 ```bash
@@ -104,7 +126,7 @@ export $(cat .env | grep -v '#' | xargs)
 dagster dev -f dagster/definition.py
 ```
 
-### Step 5: Final Analytics
+### Step 6: Final Analytics
 
 Once the data is in BigQuery and the models are built, run the final outputs:
 
