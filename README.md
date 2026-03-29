@@ -36,104 +36,78 @@ As shown in figure 1, raw CSV files from Olist are extracted and loaded by **Mel
 ---
 ## ⚙️ Setup & Installation
 
-### 1. Clone the Repository
+Follow these steps to replicate the environment and run the full data pipeline.
 
+### Step 1: Environment & Secrets Setup
+
+First, recreate the environment and provide your own credentials.
+
+1. **Clone & Enter Repo:**
 ```bash
-git clone https://github.com/<your-org>/2026-02-06_DS4_GP5_olist.git
-cd 2026-02-06_DS4_GP5_olist
+   git clone https://github.com/<your-org>/2026-02-06_DS4_GP5_olist.git
+   cd 2026-02-06_DS4_GP5_olist
 ```
 
-### 2. Create the Conda Environment
-
+2. **Create/Update Conda Environment:**
 ```bash
-conda env create -f environment.yml
-conda activate olist-bq
+   conda env update --file environment.yml --prune
+   conda activate olist-bq
 ```
 
-### 3. Configure Credentials
-
-Copy the example environment file and fill in your Google Cloud project details:
-
+3. **Setup Credentials:**
+   - Create a `.env` file in the root folder with your `PROJECT_ID` and other secrets.
+   - **GCP Auth:**
 ```bash
-cp .env.example .env
+     gcloud auth application-default login
 ```
 
-Edit `.env` and set:
-
-```dotenv
-GOOGLE_PROJECT_ID=your-gcp-project-id
-```
-
-> **Note:** Ensure that you login via oauth and that your service account has BigQuery Data Editor and Job User roles.
-
-### 4. Verify Your Environment
-
+4. **dbt Profile:** Link the project to your local dbt config:
 ```bash
-python check_env.py
+   mkdir -p ~/.dbt
+   cp dbt_olist/profiles.yml ~/.dbt/profiles.yml
 ```
 
-### 5. Run the Streamlit Dashboard
+### Step 2: Meltano Ingestion
 
+Meltano will auto-install the plugins on the first run as long as you are in the `olist-bq` environment.
 ```bash
-streamlit run salesportal.py
+# Load .env variables into memory and run ingestion
+export $(cat .env | grep -v '#' | xargs)
+meltano --cwd meltano run tap-csv target-bigquery
 ```
+### Step 3: dbt Initialization
 
----
-
-## 🚀 Running the Pipeline
-
-### Start the Dagster UI (Asset Lineage & Orchestration)
-
-```bash
-cd dagster
-dagster dev -f definition.py
-```
-
-Open [http://localhost:3000](http://localhost:3000) to view the full asset graph and trigger pipeline runs.
-
-### Run the Full Pipeline Job
-
-From the Dagster UI, launch the `run_full_pipeline` job — or trigger it via CLI:
-
-```bash
-dagster job execute -f definition.py -j run_full_pipeline
-```
-
-### Run dbt Transformations Directly
-
+dbt needs to download packages (like `dbt_expectations`) and build the `manifest.json` before Dagster can see the assets.
 ```bash
 cd dbt_olist
-
-# Run all models
-dbt run
-
-# Run a specific layer
-dbt run --select staging
-dbt run --select intermediate
-dbt run --select marts
-
-# Run tests
-dbt test
-
-# Generate and serve documentation
+dbt deps
+dbt parse --no-partial-parse
+dbt build
 dbt docs generate
-dbt docs serve
+cd ..
 ```
 
-### Meltano EL (Extract & Load)
+### Step 4: Dagster Orchestration
 
+To ensure Dagster picks up all the dbt models and expectations correctly:
 ```bash
-cd meltano
-
-# Install plugins
-meltano install
-
-# Run the EL pipeline
-meltano run tap-csv target-bigquery
+# Set flag to force Dagster to parse dbt models on startup
+export DAGSTER_DBT_PARSE_PROJECT_ON_LOAD=1
+export $(cat .env | grep -v '#' | xargs)
+dagster dev -f dagster/definition.py
 ```
 
----
+### Step 5: Final Analytics
 
+Once the data is in BigQuery and the models are built, run the final outputs:
+
+1. **EDA:** Open and run `notebooks/eda.ipynb` (ensure the kernel is set to `olist-bq`).
+
+2. **Sales Portal:**
+```bash
+   streamlit run streamlit/salesportal.py
+```
+---
 ## 📁 Project Structure
 
 ```
