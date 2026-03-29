@@ -44,7 +44,7 @@ First, recreate the environment and provide your own credentials.
 
 1. **Clone & Enter Repo:**
 ```bash
-   git clone https://github.com/<your-org>/2026-02-06_DS4_GP5_olist.git
+   git clone https://github.com/zhang-wenxi/2026-02-06_DS4_GP5_olist.git
    cd 2026-02-06_DS4_GP5_olist
 ```
 
@@ -55,7 +55,14 @@ First, recreate the environment and provide your own credentials.
 ```
 
 3. **Setup Credentials:**
-   - Create a `.env` file in the root folder with your `PROJECT_ID` and other secrets.
+   - Rename `.env.example` to `.env`:
+```bash
+     mv .env.example .env
+```
+   - Open `.env` and fill in your `GOOGLE_PROJECT_ID`:
+```dotenv
+     GOOGLE_PROJECT_ID=your-project-id-here
+```
    - **GCP Auth:**
 ```bash
      gcloud auth application-default login
