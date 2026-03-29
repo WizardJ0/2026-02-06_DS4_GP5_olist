@@ -156,10 +156,10 @@ Once the data is in BigQuery and the models are built, run the final outputs:
    Once the kernel is set, run all cells.
 
 2. **Sales Portal:** Launches the Streamlit dashboard in your browser. 
-```bash
-streamlit run salesportal.py
-```
- > **Note:** The salesportal.py is in the root directory.
+    ```bash
+    streamlit run salesportal.py
+    ```
+    > **Note:** The salesportal.py is in the root directory.
 ---
 
 ## 📁 Project Structure
