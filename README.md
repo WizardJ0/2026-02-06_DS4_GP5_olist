@@ -59,24 +59,25 @@ Follow these steps to replicate the environment and run the full data pipeline.
 
 > **Note:** The `data/` folder is git-ignored and must be populated manually before running the pipeline.
 
+
 ### Step 2: Environment & Secrets Setup
 
 First, recreate the environment and provide your own credentials.
 
-1. **Clone & Enter Repo:**
+1. **Clone & Enter Repo:** Downloads the project from GitHub and navigates into it.
 ```bash
-   git clone https://github.com/zhang-wenxi/2026-02-06_DS4_GP5_olist.git
+   git clone https://github.com/<your-org>/2026-02-06_DS4_GP5_olist.git
    cd 2026-02-06_DS4_GP5_olist
 ```
 
-2. **Create/Update Conda Environment:**
+2. **Create/Update Conda Environment:** Installs all required Python packages and activates the project environment.
 ```bash
    conda env update --file environment.yml --prune
    conda activate olist-bq
 ```
 
 3. **Setup Credentials:**
-   - Rename `.env.example` to `.env`:
+   - Rename `.env.example` to `.env` — makes the template file your personal config file:
 ```bash
      mv .env.example .env
 ```
@@ -84,13 +85,12 @@ First, recreate the environment and provide your own credentials.
 ```dotenv
      GOOGLE_PROJECT_ID=your-project-id-here
 ```
-   - **GCP Auth:**
+   - **GCP Auth:** Tells Google Cloud to use your local account for all API access:
 ```bash
      gcloud auth application-default login
 ```
-> **Note:** The `.env` file is git-ignored and must be populated manually before running the pipeline.
 
-4. **dbt Profile:** Link the project to your local dbt config:
+4. **dbt Profile:** Copies the dbt connection config to the default location where dbt looks for it on your machine.
 ```bash
    mkdir -p ~/.dbt
    cp dbt_olist/profiles.yml ~/.dbt/profiles.yml
@@ -100,19 +100,21 @@ First, recreate the environment and provide your own credentials.
 
 Meltano will auto-install the plugins on the first run as long as you are in the `olist-bq` environment.
 ```bash
-# Load .env variables into memory and run ingestion
+# Loads your .env credentials into the terminal session
 export $(cat .env | grep -v '#' | xargs)
+# Reads the CSV files and uploads them to BigQuery
 meltano --cwd meltano run tap-csv target-bigquery
 ```
+
 ### Step 4: dbt Initialization
 
 dbt needs to download packages (like `dbt_expectations`) and build the `manifest.json` before Dagster can see the assets.
 ```bash
 cd dbt_olist
-dbt deps
-dbt parse --no-partial-parse
-dbt build
-dbt docs generate
+dbt deps          # Downloads dbt packages/plugins listed in packages.yml
+dbt parse --no-partial-parse   # Validates all models and builds a fresh manifest.json
+dbt build         # Runs and tests all models, creating tables in BigQuery
+dbt docs generate # Generates a browsable documentation site for your models
 cd ..
 ```
 
@@ -120,9 +122,11 @@ cd ..
 
 To ensure Dagster picks up all the dbt models and expectations correctly:
 ```bash
-# Set flag to force Dagster to parse dbt models on startup
+# Forces Dagster to re-read all dbt models fresh on startup
 export DAGSTER_DBT_PARSE_PROJECT_ON_LOAD=1
+# Loads your .env credentials into the terminal session
 export $(cat .env | grep -v '#' | xargs)
+# Launches the Dagster web UI using your pipeline definition
 dagster dev -f dagster/definition.py
 ```
 
@@ -132,7 +136,7 @@ Once the data is in BigQuery and the models are built, run the final outputs:
 
 1. **EDA:** Open and run `notebooks/eda.ipynb` (ensure the kernel is set to `olist-bq`).
 
-2. **Sales Portal:**
+2. **Sales Portal:** Launches the Streamlit dashboard in your browser.
 ```bash
    streamlit run streamlit/salesportal.py
 ```
@@ -300,7 +304,7 @@ A custom `DagsterDbtTranslator` subclass enriches the Dagster asset graph UI wit
 ---
 ## 🔬 Exploratory Data Analysis (EDA)
 
-The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consistency check against the transformed BigQuery marts before dashboard consumption.
+The EDA notebook (`notebooks/eda.ipynb`) performs a full data quality audit, consistency check, and business analysis against the transformed BigQuery marts before dashboard consumption.
 
 ### Notebook Sections
 
@@ -314,7 +318,19 @@ The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consis
 | 6 | **Intermediate Table Patching & Monetary Logic** | Null monetary values patched to 0; long decimals rounded to 2dp (e.g. `238.99000000000004` → `238.99`) |
 | 7 | **City & State Normalization Check** | **10 cities** with residual accent encoding errors (`maceia³` → `maceió`); 0 affected states |
 | 8 | **Final Sales & Payments Integrity** | **0 rows dropped** from `fct_sales` — no zero-payment or missing payment method records found |
+| 9 | **Revenue & Order Trends + Dec 2016 Anomaly** | Nov 2016 = 0 entries, Dec 2016 = 1 entry only — confirmed upstream data gap in Kaggle source, not a business event |
+| 10 | **Top Product Categories by Order Volume** | `bed_bath_table` leads with highest order count; `computers` leads by AOV despite lower volume |
+| 11 | **Average Order Value (AOV) by Category & Payment Method** | Credit card dominates at ~74% of payments; computers category has highest AOV |
+| 12 | **Repeat Purchase Rate & Revenue Contribution** | Only ~3% of customers make repeat purchases, contributing ~6% of total revenue |
+| 13 | **Review Score → Revenue & AOV Impact** | Score 5 generates highest orders and revenue; low scores correlate with higher AOV (expensive items rated poorly) |
+| 14 | **Order Cancellation Rate** | Cancellation rate <1% — strong platform reliability despite low repeat purchase rate |
+| 15 | **Review Score vs Shipping Days** | Confirmed negative correlation — faster delivery directly drives higher review scores |
+| 16 | **Top 15 Best Selling Categories** | Donut + bar chart mirroring dashboard — `bed_bath_table` dominates by volume |
+| 17 | **State Market Share by Product Category** | Sunburst + heatmap — São Paulo dominates all categories; secondary focus on MG and RJ |
+| 18 | **Customer Loyalty Segmentation** | RFV treemap + revenue by segment — Potential Loyalists largest group; Champions small but highest value |
+
 ---
+
 ### 📊 Statistical Profile — `fct_sales`
 
 | Metric | `price` | `freight_value` | `total_payment_value` |
@@ -327,6 +343,25 @@ The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consis
 | **Max** | R$ 6,735.00 | R$ 409.68 | R$ 6,929.31 |
 
 > **Key insight:** Mean (R$141) significantly exceeds median (R$92), indicating a right-skewed distribution driven by high-value outlier orders — log-scale applied in the dashboard to preserve visual clarity across all revenue ranges.
+
+---
+
+### 📉 Business Analysis Findings
+
+| Business Question | Finding |
+|---|---|
+| **Revenue trend over time** | Consistent growth from 2017–2018; Nov 2016 missing entirely, Dec 2016 has 1 order only — known Kaggle source gap |
+| **Peak order months** | August, May, July are highest volume months; monthly average ~8,600 orders |
+| **Top product category** | `bed_bath_table` — highest order count across all years |
+| **Highest AOV category** | `computers` — customers spend more per order despite lower frequency |
+| **Dominant payment method** | Credit card (~74%), followed by boleto (~19%) |
+| **Repeat purchase rate** | ~3% of customers return — loyalty programs critical to improve retention |
+| **Review score vs revenue** | Positive correlation — score 5 drives highest orders and revenue |
+| **Review score vs AOV** | Negative correlation — low-rated products tend to be expensive items |
+| **Cancellation rate** | <1% — high platform reliability confirmed |
+| **Shipping vs review score** | Negative correlation — faster delivery = higher review score |
+| **Top state by revenue** | São Paulo dominates all product categories |
+| **Largest customer segment** | Potential Loyalists — biggest opportunity for conversion to Loyal/Champions |
 
 ---
 
@@ -344,49 +379,61 @@ The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consis
 - **Root cause:** Traced to `int_orders_enriched` — customers whose `order_status` was `canceled` or `unavailable` were excluded from RFM scoring, leaving their metrics as `NULL`
 - **Fix:** Added a conditional in the model to coalesce `NULL` monetary/frequency/recency values to `0` for any order with status `canceled` or `unavailable`, ensuring every customer receives a valid RFV score
 - `customer_id_is_invalid: [False]` confirmed uniformly across all records post-fix ✅
+
 ---
+
 ### 🛠️ Technical Implementation & Manual Patches
 
 **📦 Product Dimension & Categorization**
-*   **Issue:** Specific products (e.g., `5eb5646...`) had blank `product_category_name`, `-1` for descriptions, and `NULL` physical dimensions.
-*   **Fix:** Updated `dim_products` and `int_products_categorized` to replace nulls with an explicit `'uncategorized'` label using:
-    ```sql
-    coalesce(cm.product_category_name, 'uncategorized')
-    ```
-*   **Result:** Retest confirmed **591 products** correctly labeled with zero blank strings in the final marts ✅.
+- **Issue:** Specific products (e.g., `5eb5646...`) had blank `product_category_name`, `-1` for descriptions, and `NULL` physical dimensions
+- **Fix:** Updated `dim_products` and `int_products_categorized` to replace nulls with an explicit `'uncategorized'` label using `coalesce(cm.product_category_name, 'uncategorized')`
+- **Result:** Retest confirmed **591 products** correctly labeled with zero blank strings in the final marts ✅
 
 **📐 Loyalty Logic (RFV) & Frequency Repair**
-*   **Issue 1:** `frequency` was returning `1` for all customers because the model joined on `customer_id` (an order-level key) instead of a unique person identifier.
-*   **Issue 2:** `recency` was returning 4-digit epoch days instead of days since the last order.
-*   **Fix:** Migrated the primary join key from `customer_id` to `customer_uuid`. This resolved the frequency collapse and fixed the recency calculation error.
-*   **Monetary Patch:** Updated `int_orders_enriched` to `coalesce` monetary/frequency values to `0` for canceled or unavailable orders, ensuring 100% of the 96K+ customers received a valid RFM score ✅.
+- **Issue 1:** `frequency` was returning `1` for all customers because the model joined on `customer_id` (an order-level key) instead of a unique person identifier
+- **Issue 2:** `recency` was returning 4-digit epoch days instead of days since the last order
+- **Fix:** Migrated the primary join key from `customer_id` to `customer_uuid`. This resolved the frequency collapse and fixed the recency calculation error
+- **Monetary Patch:** Updated `int_orders_enriched` to `coalesce` monetary/frequency values to `0` for canceled or unavailable orders, ensuring 100% of the 96K+ customers received a valid RFM score ✅
 
 **🔢 Float Precision & Schema Standardization**
-*   **Issue:** BigQuery `FLOAT64` arithmetic created long decimals (e.g., `238.99000000000004`) in `total_item_value` and `freight_value`.
-*   **Fix:** Applied `ROUND(..., 2)` directly in the **staging models** so all downstream tables inherit clean 2-decimal-place values.
-*   **Schema Validation:** Confirmed `payment_installments` as `Int64` and all financial columns as `float64` to prevent dashboard instability ✅.
+- **Issue:** BigQuery `FLOAT64` arithmetic created long decimals (e.g., `238.99000000000004`) in `total_item_value` and `freight_value`
+- **Fix:** Applied `ROUND(..., 2)` directly in the staging models so all downstream tables inherit clean 2-decimal-place values
+- **Schema Validation:** Confirmed `payment_installments` as `Int64` and all financial columns as `float64` to prevent dashboard instability ✅
 
 **📍 Geolocation Standardization**
-*   **Issue:** Customer zip codes were missing from the source geolocation table, and 4-digit prefixes caused lookup failures.
-*   **Fix:** Introduced a `dbt seed` file (`patch_missing_geolocations.csv`) to backfill missing entries.
-*   **Formatting:** Standardized all prefixes to a 5-digit format by padding 4-digit values with a leading `0` ✅.
+- **Issue:** Customer zip codes were missing from the source geolocation table, and 4-digit prefixes caused lookup failures
+- **Fix:** Introduced a `dbt seed` file (`patch_missing_geolocations.csv`) to backfill missing entries
+- **Formatting:** Standardized all prefixes to a 5-digit format by padding 4-digit values with a leading `0` ✅
+
+**🔗 Table Join Key Discrepancy**
+- **Issue:** `fct_sales.customer_id` does not directly match `stg_customers.customer_id` — they use different key spaces
+- **Fix:** All customer-level lookups (state, segment, unique customer count) must route through `int_orders_enriched` as the bridge table, whose `customer_id` correctly maps to `stg_customers`
+- **Impact:** Repeat purchase analysis uses `customer_unique_id` via this bridge to correctly identify returning customers across multiple orders ✅
+
 ---
+
 ### ✅ Final Pipeline Status & Validation
 
 **Data Integrity & Schema**
-*   [x] **fct_sales Grain:** Verified at **113,419 records** (no join loss).
-*   [x] **Schema Validation:** All financial columns cast to `float64` and ID columns to `object`.
-*   [x] **Float Precision:** Standardized to 2 decimal places across all staging models.
-*   [x] **Payment Metrics:** `payment_installments` confirmed as `Int64`.
+- [x] **fct_sales Grain:** Verified at **113,419 records** (no join loss)
+- [x] **Schema Validation:** All financial columns cast to `float64` and ID columns to `object`
+- [x] **Float Precision:** Standardized to 2 decimal places across all staging models
+- [x] **Payment Metrics:** `payment_installments` confirmed as `Int64`
 
 **Dimension & Business Logic**
-*   [x] **Customer RFM:** 100% of 96K+ customers assigned a valid segment (zero NULL gaps).
-*   [x] **Loyalty Identity:** Successfully switched to `customer_uuid` for accurate frequency scoring.
-*   [x] **Product Categories:** 591 blank categories successfully labeled as 'uncategorized'.
+- [x] **Customer RFM:** 100% of 96K+ customers assigned a valid segment (zero NULL gaps)
+- [x] **Loyalty Identity:** Successfully switched to `customer_uuid` for accurate frequency scoring
+- [x] **Product Categories:** 591 blank categories successfully labeled as `uncategorized`
 
 **Geographic Normalization**
-*   [x] **Geolocation Coverage:** 100% zip code match achieved via dbt seed backfill.
-*   [x] **Zip Code Formatting:** Standardized to 5-digit strings for all Brazilian regions.
+- [x] **Geolocation Coverage:** 100% zip code match achieved via dbt seed backfill
+- [x] **Zip Code Formatting:** Standardized to 5-digit strings for all Brazilian regions
+
+**Business Analysis**
+- [x] **Dec 2016 Anomaly:** Confirmed as upstream Kaggle data gap — 1 order only, not a business event
+- [x] **Repeat Purchase Rate:** ~3% of customers, ~6% of revenue — loyalty gap identified
+- [x] **Review-Shipping Correlation:** Negative correlation confirmed — delivery speed is key driver of ratings
+- [x] **State Market Share:** São Paulo dominant across all categories — stocking strategy validated
 ---
 ## 📊 Dashboard Preview
 
