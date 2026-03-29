@@ -13,10 +13,11 @@
 ## 🗺️ Pipeline Overview
 
 <p align="center">
-  <img src="asset/datastackarch.png" width="800" alt="Modern Data Stack Architecture">
+  <img src="asset/datastackarch.png" width="800" alt="Modern Data Stack Architecture"><br>
+  <b>Figure 1</b>
 </p>
 
-Raw CSV files from Olist are extracted and loaded by **Meltano**, orchestrated end-to-end by **Dagster** (with full asset lineage), transformed through three dbt layers into analytics-ready marts in **BigQuery**, and surfaced via a **Streamlit** executive dashboard.
+As shown in figure 1, raw CSV files from Olist are extracted and loaded by **Meltano** and orchestrated end-to-end by **Dagster** (with full asset lineage). Data is transformed through three dbt layers, staging, intermediate and mart, coupled with **dbt-expection** for rigorous testing within a modern **Medallion Architecture**.This process turns raw data into analytics-ready insights in **BigQuery**, which are then surfaced via a **Streamlit** executive dashboard.
 
 ---
 
@@ -33,46 +34,6 @@ Raw CSV files from Olist are extracted and loaded by **Meltano**, orchestrated e
 | **salesportal.py / .streamlit/** | [Streamlit](https://streamlit.io) + Plotly | Executive dashboard — KPIs, monthly revenue trends, state-level sales, RFM segmentation, and product category analysis |
 
 ---
-
-## 🏗️ dbt Model Architecture
-
-```
-dbt_olist/models/
-├── staging/                        # Materialized as VIEWS (Medallion Bronze Layer:Raw Data Ingestion)
-│   ├── sources.yml
-│   ├── stg_customers.sql/.yml
-│   ├── stg_geolocation.sql/.yml
-│   ├── stg_order_items.sql/.yml
-│   ├── stg_order_payments.sql/.yml
-│   ├── stg_order_reviews.sql/.yml
-│   ├── stg_orders.sql/.yml
-│   ├── stg_products.sql/.yml
-│   └── stg_sellers.sql/.yml
-│
-├── intermediate/                   # Materialized as TABLES(Medallion Silver Layer:Business Logic)
-│   ├── int_customer_location_mapping.sql
-│   ├── int_customer_metrics.sql
-│   ├── int_customer_segments.sql
-│   ├── int_order_items_aggregated.sql
-│   ├── int_order_payments_summary.sql
-│   ├── int_orders_date_validity.sql
-│   ├── int_orders_enriched.sql
-│   ├── int_products_categorized.sql
-│   ├── int_rfv_quartiles.sql
-│   └── int_top_15_products.sql
-│
-└── marts/core/                     # Materialized as TABLES(Medallion Gold Layer:Facts and Dimensions)
-    ├── fct_sales.sql               # Central fact table
-    ├── dim_customers.sql           # RFM-enriched customer dimension
-    ├── dim_orders.sql              # Order lifecycle & delivery metrics
-    ├── dim_products.sql            # Product category enrichment
-    ├── dim_sellers.sql             # Seller performance dimension
-    ├── dim_location.sql            # Geographic dimension
-    └── dim_time.sql                # Time dimension
-```
-
----
-
 ## ⚙️ Setup & Installation
 
 ### 1. Clone the Repository
@@ -380,58 +341,54 @@ The EDA notebook (`eda/eda.ipynb`) performs a full data quality audit and consis
 - **Root cause:** Traced to `int_orders_enriched` — customers whose `order_status` was `canceled` or `unavailable` were excluded from RFM scoring, leaving their metrics as `NULL`
 - **Fix:** Added a conditional in the model to coalesce `NULL` monetary/frequency/recency values to `0` for any order with status `canceled` or `unavailable`, ensuring every customer receives a valid RFV score
 - `customer_id_is_invalid: [False]` confirmed uniformly across all records post-fix ✅
-
-**📦 `dim_products` — Uncategorized & Null Spec Fixes**
-- **Issue:** Some products (e.g. `5eb564652db742ff8f28759cd8d2652a`) had blank `product_category_name`, `product_name` as `-1`, `product_description` as `-1`, `product_photos_qty` as `0`, and all physical dimension fields as `NULL`
-- **Fix:** Retested `dim_products` and `int_products_categorized`; corrected both models to replace blank or null category values with the explicit string `'uncategorized'` using:
-```jinja-sql
-coalesce(cm.product_category_name, 'uncategorized')
-```
-- Retest confirmed **591 uncategorized products** correctly labelled — no more blank strings in `product_category_name` ✅
-
-**📐 `int_customer_metrics` & `int_rfv_quartiles` — Monetary Nulls & Frequency Fix**
-- **Issue 1:** `monetary_value` had null entries and long floating-point decimals for some records
-- **Issue 2:** `frequency` was returning `1` for all customers — root cause: the model was joining on `customer_id` (a non-unique order-level key) instead of the true unique identifier
-- **Issue 3:** `recency` values were returning 4-digit numbers (days since epoch instead of days since last order)
-- **Fix:** Switched the join key from `customer_id` to `customer_uuid` (the true unique customer identifier), which resolved both the frequency collapse and recency miscalculation
-- `monetary_value` nulls patched to `0` via `coalesce`; confirmed `NULL monetary values remaining: 0` ✅
-
-**🔢 Float Precision — Staging Model Rounding**
-- **Issue:** Several numeric columns (`total_item_value`, `total_freight_value`, `price`, `freight_value`) carried long floating-point decimals due to BigQuery `FLOAT64` arithmetic (e.g. `238.99000000000004`)
-- **Fix:** Applied `ROUND(..., 2)` directly in the **staging models** so all downstream intermediate and mart tables inherit clean 2-decimal-place values — no ad-hoc patching required at the mart layer
-- Sample audit confirmed: `total_item_value: 238.99`, `total_freight_value: 22.47` ✅
 ---
+### 🛠️ Technical Implementation & Manual Patches
 
-### 🔍 Key Findings from EDA analysis and patches completed
+**📦 Product Dimension & Categorization**
+*   **Issue:** Specific products (e.g., `5eb5646...`) had blank `product_category_name`, `-1` for descriptions, and `NULL` physical dimensions.
+*   **Fix:** Updated `dim_products` and `int_products_categorized` to replace nulls with an explicit `'uncategorized'` label using:
+    ```sql
+    coalesce(cm.product_category_name, 'uncategorized')
+    ```
+*   **Result:** Retest confirmed **591 products** correctly labeled with zero blank strings in the final marts ✅.
 
-**Customer Dimension**
-- `NULL RFV: 0` — all 96K+ customers successfully assigned an RFM segment; no scoring gaps remain
-- `customer_id_is_invalid: [False]` — zero corrupted or duplicate customer IDs across the entire dimension table
+**📐 Loyalty Logic (RFV) & Frequency Repair**
+*   **Issue 1:** `frequency` was returning `1` for all customers because the model joined on `customer_id` (an order-level key) instead of a unique person identifier.
+*   **Issue 2:** `recency` was returning 4-digit epoch days instead of days since the last order.
+*   **Fix:** Migrated the primary join key from `customer_id` to `customer_uuid`. This resolved the frequency collapse and fixed the recency calculation error.
+*   **Monetary Patch:** Updated `int_orders_enriched` to `coalesce` monetary/frequency values to `0` for canceled or unavailable orders, ensuring 100% of the 96K+ customers received a valid RFM score ✅.
 
-**Product Dimension**
-- **591 uncategorized products** detected; handled upstream via `int_products_categorized` intermediate model
-- Zero null values for `product_weight_g` and `product_length_cm` — physical specs fully populated
+**🔢 Float Precision & Schema Standardization**
+*   **Issue:** BigQuery `FLOAT64` arithmetic created long decimals (e.g., `238.99000000000004`) in `total_item_value` and `freight_value`.
+*   **Fix:** Applied `ROUND(..., 2)` directly in the **staging models** so all downstream tables inherit clean 2-decimal-place values.
+*   **Schema Validation:** Confirmed `payment_installments` as `Int64` and all financial columns as `float64` to prevent dashboard instability ✅.
 
-**Sales Integrity**
-- `fct_sales` confirmed at **113,419 records, 12 columns** — no rows dropped by the zero-payment filter
-- All financial columns (`price`, `freight_value`, `total_payment_value`) confirmed as `float64` — numeric casting fix validated
-- `payment_installments` confirmed as `Int64`; all ID columns correctly typed as `object`
+**📍 Geolocation Standardization**
+*   **Issue:** Customer zip codes were missing from the source geolocation table, and 4-digit prefixes caused lookup failures.
+*   **Fix:** Introduced a `dbt seed` file (`patch_missing_geolocations.csv`) to backfill missing entries.
+*   **Formatting:** Standardized all prefixes to a 5-digit format by padding 4-digit values with a leading `0` ✅.
+---
+### ✅ Final Pipeline Status & Validation
+
+**Data Integrity & Schema**
+*   [x] **fct_sales Grain:** Verified at **113,419 records** (no join loss).
+*   [x] **Schema Validation:** All financial columns cast to `float64` and ID columns to `object`.
+*   [x] **Float Precision:** Standardized to 2 decimal places across all staging models.
+*   [x] **Payment Metrics:** `payment_installments` confirmed as `Int64`.
+
+**Dimension & Business Logic**
+*   [x] **Customer RFM:** 100% of 96K+ customers assigned a valid segment (zero NULL gaps).
+*   [x] **Loyalty Identity:** Successfully switched to `customer_uuid` for accurate frequency scoring.
+*   [x] **Product Categories:** 591 blank categories successfully labeled as 'uncategorized'.
 
 **Geographic Normalization**
-- **10 residual encoding errors** found in `customer_city` — all in Alagoas (AL), manifesting as `maceia³` instead of `maceió`
-- Root cause: Latin-1 / UTF-8 encoding mismatch on a manually edited subset of source rows
-- All state abbreviations (`customer_state`) confirmed accent-free ✅
-- These 10 records are visible only when querying raw data via Python/dbt — BigQuery UI preview and Excel silently mask the broken byte
-
-**Monetary Patching**
-- `monetary_value` nulls → patched to `0`; no downstream NaN errors in RFM calculations
-- Sample audit record confirmed: `total_item_value: 238.99`, `total_freight_value: 22.47` — 2dp rounding validated ✅
-  
+*   [x] **Geolocation Coverage:** 100% zip code match achieved via dbt seed backfill.
+*   [x] **Zip Code Formatting:** Standardized to 5-digit strings for all Brazilian regions.
 ---
-
 ## 📊 Dashboard Preview
 
-The Streamlit dashboard provides an executive-level view of the Olist dataset across four sections:
+The Streamlit dashboard provides an executive-level view of the Olist dataset across four key sections:
+
 
 | Section | Description |
 |---|---|
@@ -443,14 +400,41 @@ The Streamlit dashboard provides an executive-level view of the Olist dataset ac
 | **State Market Share** | Sunburst chart drilling from state → product category revenue |
 
 <p align="center">
-  <img src="asset/salesportal1.png" width="800" alt="Dashboard Overview">
+  <img src="asset/salesportal.png" width="800" alt="Dashboard Overview"><b>Figure 2</b>
 </p>
+
+Figure 2 illustrates the full dashboard view. To enhance our insights, we can zoom into specific interactive features in the figures below.
+
 <p align="center">
-  <img src="asset/salesportal2.png" width="800" alt="Customer Segments & Categories">
+  <img src="asset/MonthlySalesRevenueChart-autoscale.png" width="800" alt="Monthly Sales Revenue AutoScaled icon"><b>Figure 3</b>
 </p>
+
+The **Monthly Sales Revenue** chart includes an **auto-scale icon** in the top right corner (Figure 3). This feature is essential for visualizing periods like December 2016, where sales figures were significantly lower due to missing data in the original Kaggle dataset.
+
 <p align="center">
-  <img src="asset/salesportal3.png" width="800" alt="State Market Share Sunburst">
-</p
+  <img src="asset/MonthlySalesRevenueChart-scaled.png" width="800" alt="Monthly Sales Revenue"><b>Figure 4</b>
+</p>
+
+Once the auto-scale icon is selected (Figure 4), the chart automatically adjusts its scale to ensure every month’s revenue remains visible and legible.
+
+<p align="center">
+  <img src="asset/customerloyaltymixchart-inactivezoomin.png" width="800" alt="Customer Loyalty Mix - Inactive Segment"><b>Figure 5</b>
+</p>
+
+Figures 5 and 6 provide close-up views of the **Customer Loyalty Mix**. Zooming into the **Inactive** segment (Figure 5) makes the low-percentage values easier to read for executive review.
+
+<p align="center">
+  <img src="asset/customerloyaltymixchart-uncategoriedzoomin.png" width="800" alt="Customer Loyalty Mix - Uncategorized Segment"><b>Figure 6</b>
+</p>
+
+Similarly, zooming into the **Uncategorized** segment (Figure 6) ensures that even the smallest customer groupings are clearly represented.
+
+<p align="center">
+  <img src="asset/top15bestsellingproductcategories.png" width="800" alt="Top 15 Best Selling Product Categories"><b>Figure 7</b>
+</p>
+
+The **Top 15 Best Selling Product Categories** donut chart (Figure 7) uses a custom sorting rule for the legend. Instead of sorting strictly by size, items are ordered by category importance. To maintain focus on top performers, the **"Others"** category is anchored to the bottom of the legend and positioned in the donut chart to end at the 12 o'clock mark. This ensures the #1 best-seller always begins at the top for immediate clarity.
+
 ---
 
 ## 🧪 Data Quality
@@ -459,21 +443,6 @@ Quality gates are enforced at two levels:
 
 - **dbt tests** — schema tests (not_null, unique, accepted_values) and `dbt_expectations` package tests run after every model execution
 - **Dagster `quality_gate` asset** — downstream asset that confirms all dbt tests pass before docs generation proceeds
-
----
-
-## 📦 Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Language | Python 3.10+ |
-| Environment | Conda (`environment.yml`) |
-| Extract & Load | Meltano |
-| Orchestration | Dagster + dagster-dbt |
-| Transformation | dbt-core + dbt-bigquery + dbt-expectations |
-| Data Warehouse | Google BigQuery |
-| EDA | Jupyter, Pandas, Matplotlib, Seaborn, Plotly |
-| Visualization | Streamlit + Plotly Express |
 
 ---
 
