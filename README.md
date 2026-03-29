@@ -406,7 +406,7 @@ The Streamlit dashboard provides an executive-level view of the Olist dataset ac
 Figure 2 illustrates the full dashboard view. To enhance our insights, we can zoom into specific interactive features in the figures below.
 
 <p align="center">
-  <img src="asset/MonthlySalesRevenueChart-autoscale.png"  width="80" alt="Monthly Sales Revenue AutoScaled icon"><b>Figure 3</b>
+  <img src="asset/MonthlySalesRevenueChart-autoscale.png"  width="300" alt="Monthly Sales Revenue AutoScaled icon"><b>Figure 3</b>
 </p>
 
 The **Monthly Sales Revenue** chart includes an **auto-scale icon** in the top right corner (Figure 3). This feature is essential for visualizing periods like December 2016, where sales figures were significantly lower due to missing data in the original Kaggle dataset.
